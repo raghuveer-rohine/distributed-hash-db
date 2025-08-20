@@ -1,0 +1,32 @@
+server:
+  port: ${PORT:8080}
+
+replication:
+  factor: ${REPLICATION_FACTOR:2}
+
+spring:
+  application:
+    name: distributed-database
+  cloud:
+    consul:
+      host: host.docker.internal
+      port: 8500
+      discovery:
+        register: true
+        prefer-ip-address: true
+        health-check-path: /api/health
+        health-check-interval: 10s
+        deregister-critical-service-after: 30s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.cs.service: DEBUG

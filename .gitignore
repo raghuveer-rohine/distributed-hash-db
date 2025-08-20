@@ -1,0 +1,93 @@
+# Project Documentation (keep README, ignore help)
+HELP.md
+
+# Maven
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Logs and temporary files
+*.log
+app_*.log
+rough.txt
+*.tmp
+*.temp
+
+# Maven wrapper command (Windows)
+mvnw.cmd
+
+# Spring Boot
+.springBeans
+.sts4-cache
+
+### IDE ###
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Eclipse/STS
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# VS Code
+.vscode/
+
+### Operating System ###
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+*.exe
+*.msi
+desktop.ini
+
+# Linux
+*~
+
+### Application Specific ###
+
+# Backup files
+*.backup
+*.bak
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Process IDs
+*.pid
+
+# Coverage reports
+coverage/
+*.lcov
+
+# Dependency directories that might be generated
+node_modules/
