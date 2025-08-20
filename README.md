@@ -122,7 +122,7 @@ The system uses Consul for service discovery. You need to run Consul before star
 #### Start Consul Server
 
 ```bash
-# Create Docker network for Consul
+# Create Docker network for Consul (optional but recommended)
 docker network create consul-net
 
 # Start Consul server
@@ -146,31 +146,13 @@ curl http://localhost:8500/v1/status/leader
 # Open browser to: http://localhost:8500/ui
 ```
 
-#### Consul Configuration in Application
-
-The database nodes are configured to register with Consul automatically:
-
-```properties
-# Consul configuration (in application.properties)
-spring.cloud.consul.host=localhost
-spring.cloud.consul.port=8500
-spring.cloud.consul.discovery.enabled=true
-spring.cloud.consul.discovery.register=true
-spring.cloud.consul.discovery.instance-id=${spring.application.name}-${server.port}
-spring.cloud.consul.discovery.health-check-path=/api/health
-spring.cloud.consul.discovery.health-check-interval=10s
-```
-
 ## 🚀 Quick Start
 
 ### Step 1: Start Consul
 
-First, ensure Consul is running:
-
 ```bash
-# If not already running, start Consul
+# Start Consul server
 docker run -d --name=consul-server \
-  --net=consul-net \
   -p 8500:8500 \
   -e CONSUL_BIND_INTERFACE=eth0 \
   hashicorp/consul:1.21 agent -server -bootstrap-expect=1 \
@@ -225,14 +207,24 @@ For more control over individual nodes or custom configurations.
 #### Start Database Nodes
 
 ```bash
-# Terminal 1: Start first node
-mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=8080 --replication.factor=2"
+# Terminal 1: Start first node (default port 8080, replication factor 2)
+mvn spring-boot:run
 
-# Wait 10-15 seconds, then Terminal 2: Start second node
-mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=8081 --replication.factor=2"
+# Wait 10-15 seconds, then Terminal 2: Start second node on port 8081
+PORT=8081 mvn spring-boot:run
 
-# Wait 10-15 seconds, then Terminal 3: Start third node
-mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=8082 --replication.factor=2"
+# Wait 10-15 seconds, then Terminal 3: Start third node on port 8082
+PORT=8082 mvn spring-boot:run
+```
+
+#### Custom Configuration
+
+```bash
+# Start with custom port and replication factor
+PORT=8083 REPLICATION_FACTOR=3 mvn spring-boot:run
+
+# Start with JVM arguments
+mvn spring-boot:run -Dspring-boot.run.jvmArguments="-DPORT=8084 -DREPLICATION_FACTOR=2"
 ```
 
 #### Verify Cluster Formation
@@ -363,54 +355,74 @@ GET /api/data/all
 
 ## 🔧 Configuration
 
-### Application Properties
+### Application Configuration (application.yml)
 
-```properties
-# Server Configuration
-server.port=8080
+```yaml
+server:
+  port: ${PORT:8080}
 
-# Replication Configuration
-replication.factor=2
+replication:
+  factor: ${REPLICATION_FACTOR:2}
 
-# Consul Configuration
-spring.cloud.consul.host=localhost
-spring.cloud.consul.port=8500
-spring.cloud.consul.discovery.enabled=true
-spring.cloud.consul.discovery.register=true
-spring.cloud.consul.discovery.instance-id=${spring.application.name}-${server.port}
-spring.cloud.consul.discovery.service-name=distributed-database
-spring.cloud.consul.discovery.health-check-path=/api/health
-spring.cloud.consul.discovery.health-check-interval=10s
-spring.cloud.consul.discovery.health-check-timeout=5s
-spring.cloud.consul.discovery.health-check-critical-timeout=30s
+spring:
+  application:
+    name: distributed-database
+  cloud:
+    consul:
+      host: host.docker.internal
+      port: 8500
+      discovery:
+        register: true
+        prefer-ip-address: true
+        health-check-path: /api/health
+        health-check-interval: 10s
+        deregister-critical-service-after: 30s
 
-# Logging Configuration
-logging.level.com.yourpackage.distributed=DEBUG
-logging.level.com.yourpackage.distributed.ConsistentHashRing=TRACE
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.cs.service: DEBUG
 ```
 
-### Environment Variables
+### Configuration Options
+
+#### Environment Variables
+
+Configure nodes using environment variables:
 
 ```bash
-# Set replication factor
+# Set custom port
+export PORT=8083
+
+# Set replication factor (must be same across all nodes)
 export REPLICATION_FACTOR=3
 
-# Set server port
-export SERVER_PORT=8080
-
-# Set Consul host
-export CONSUL_HOST=localhost
-export CONSUL_PORT=8500
+# Start node with custom configuration
+mvn spring-boot:run
 ```
 
-### Consul Environment Variables
+#### Key Configuration Parameters
 
-```bash
-# For Docker Consul setup
-export CONSUL_BIND_INTERFACE=eth0
-export CONSUL_CLIENT_ADDR=0.0.0.0
-export CONSUL_DATA_DIR=/consul/data
-```
+- **PORT**: Server port (default: 8080)
+- **REPLICATION_FACTOR**: Number of replicas for each key (default: 2)
+- **Consul Host**: Set to `host.docker.internal` for Docker Desktop compatibility
+- **Health Check Interval**: Consul health checks every 10 seconds
+- **Deregistration**: Failed services automatically removed after 30 seconds
+
+### Consul Configuration Notes
+
+The application is configured to use `host.docker.internal` as the Consul host, which works seamlessly with:
+- **Docker Desktop** (Windows/Mac): Automatically resolves to host machine
+- **Linux Docker**: May need to use `localhost` or specific IP address
+- **Production**: Update to actual Consul server address
 
 ## 💾 Data Operations
 
@@ -442,8 +454,8 @@ The system uses **consistent hashing** to determine where data is stored:
 
 #### Automatic Addition (Recommended)
 ```bash
-# Simply start new node - it auto-registers with Consul
-mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=8085 --replication.factor=2"
+# Simply start new node with unique port
+PORT=8085 mvn spring-boot:run
 ```
 
 **What Happens:**
@@ -486,6 +498,12 @@ curl http://localhost:8080/api/health
 # Response: OK
 ```
 
+#### Detailed Health Information
+```bash
+curl http://localhost:8080/actuator/health
+# Response: Detailed health status with Spring Boot Actuator
+```
+
 #### Cluster Health via Consul
 ```bash
 # Check all services
@@ -524,9 +542,6 @@ grep "Replicating key\|replication" app.log
 
 #### Basic CRUD Operations
 ```bash
-# Ensure Consul is running
-curl http://localhost:8500/v1/status/leader
-
 # Store data
 curl -X POST http://localhost:8080/api/data \
   -H "Content-Type: application/json" \
@@ -637,11 +652,16 @@ curl http://localhost:8500/v1/health/service/distributed-database
    docker ps | grep consul
    ```
 
-2. **Verify Application Properties**
-   ```properties
-   spring.cloud.consul.host=localhost
-   spring.cloud.consul.port=8500
-   spring.cloud.consul.discovery.enabled=true
+2. **Verify Consul Host Configuration**
+
+   For **Docker Desktop** (Windows/Mac): Use `host.docker.internal` (default in application.yml)
+
+   For **Linux**: May need to change to `localhost` or specific IP:
+   ```yaml
+   spring:
+     cloud:
+       consul:
+         host: localhost  # Change from host.docker.internal
    ```
 
 3. **Check Firewall/Network**
@@ -688,7 +708,6 @@ docker restart consul-server
 # Clean start Consul
 docker rm -f consul-server
 docker run -d --name=consul-server \
-  --net=consul-net \
   -p 8500:8500 \
   -e CONSUL_BIND_INTERFACE=eth0 \
   hashicorp/consul:1.21 agent -server -bootstrap-expect=1 \
@@ -722,24 +741,23 @@ curl http://localhost:8500/v1/health/checks/distributed-database
 
 2. **Consistent Replication Factor**: All nodes MUST use the same replication factor
    ```bash
-   # ✅ Correct - all nodes RF=2
-   mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=8080 --replication.factor=2"
-   mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=8081 --replication.factor=2"
+   # ✅ Correct - all nodes RF=2 (using environment variables)
+   REPLICATION_FACTOR=2 mvn spring-boot:run
+   PORT=8081 REPLICATION_FACTOR=2 mvn spring-boot:run
+   PORT=8082 REPLICATION_FACTOR=2 mvn spring-boot:run
    ```
 
 3. **Sequential Startup**: Allow time between node startups for proper Consul registration
    ```bash
    # ✅ Correct - wait between starts
-   mvn spring-boot:run ... &
+   mvn spring-boot:run &
    sleep 10-15
-   mvn spring-boot:run ... &
+   PORT=8081 mvn spring-boot:run &
+   sleep 10-15
+   PORT=8082 mvn spring-boot:run &
    ```
 
 4. **Network Connectivity**: Ensure all nodes can reach Consul and each other
-   ```bash
-   # Test Consul connectivity from each node's machine
-   curl http://consul-host:8500/v1/status/leader
-   ```
 
 ### 🎯 Production Deployment Best Practices
 
@@ -770,25 +788,16 @@ consul snapshot save backup.snap
 
 # Backup database state
 for port in 8080 8081 8082; do
-  curl http://localhost:$port/api/data/primary > backup_$port.json
+  curl http://localhost:$port/api/data/all > backup_$port.json
 done
 ```
-
----
-
-## 📞 Support & Contributing
-
-### Getting Help
-- **Consul Issues**: Check Docker logs and Consul UI at http://localhost:8500
-- **Database Issues**: Check application logs and ensure Consul connectivity
-- **Performance**: Provide cluster topology and load patterns
 
 ### Quick Reference
 
 #### Essential Commands
 ```bash
 # Start Consul
-docker run -d --name=consul-server --net=consul-net -p 8500:8500 \
+docker run -d --name=consul-server -p 8500:8500 \
   -e CONSUL_BIND_INTERFACE=eth0 hashicorp/consul:1.21 \
   agent -server -bootstrap-expect=1 -node=server-1 -client=0.0.0.0 -ui
 
